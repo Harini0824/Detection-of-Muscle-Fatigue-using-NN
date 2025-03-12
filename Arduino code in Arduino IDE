@@ -1,0 +1,85 @@
+const int EMG_PIN = A0;  // Connect the EMG sensor to Analog Pin A0
+int initialValue = 0;    // Store initial baseline value
+bool baselineCaptured = false;
+
+const int SAMPLE_TIME = 30000; // 30 seconds in milliseconds
+const int READ_INTERVAL = 500; // Read every 500ms
+const int NUM_READINGS = SAMPLE_TIME / READ_INTERVAL;
+
+void setup() {
+    Serial.begin(9600);  // Start Serial Monitor
+    delay(3000);         // Wait for stable readings
+
+    // Capture initial baseline value when muscle is fully relaxed
+    int sumBaseline = 0;
+    int numSamples = 10; // Take 10 samples to get an accurate baseline
+    for (int i = 0; i < numSamples; i++) {
+        sumBaseline += analogRead(EMG_PIN);
+        delay(100);  // Small delay between readings
+    }
+    initialValue = sumBaseline / numSamples; // Average baseline value
+
+    // Ensure baseline is within a realistic range
+    if (initialValue < 50) {  
+        initialValue = 50;  // Set a minimum safe baseline
+    }
+
+    baselineCaptured = true;
+    Serial.println("Baseline Captured: " + String(initialValue));
+}
+
+void loop() {
+    if (!baselineCaptured || initialValue == 0) {
+        Serial.println("Baseline not set, waiting...");
+        delay(500);
+        return;
+    }
+
+    float sumEMG = 0;
+    
+    // Collect readings for 30 seconds
+    for (int i = 0; i < NUM_READINGS; i++) {
+        int emgValue = analogRead(EMG_PIN);
+        sumEMG += emgValue;
+        delay(READ_INTERVAL);
+    }
+
+    // Calculate the average EMG over 30 seconds
+    float avgEMG = sumEMG / NUM_READINGS;
+
+    // Calculate percentage drop from initial value
+    float drop = ((float)(initialValue - avgEMG) / initialValue) * 100;
+
+    // Ensure drop is not negative
+    if (drop < 0) {
+        drop = 0;
+    }
+
+    // Classify Fatigue Level Based on Correct Thresholds
+    String fatigueLevel;
+    
+    if (drop < 30) {
+        fatigueLevel = "Low Fatigue";     // 0% - 29% drop
+    } 
+    else if (drop >= 30 && drop < 60) {
+        fatigueLevel = "Medium Fatigue";  // 30% - 59% drop
+    } 
+    else if (drop > 60) {  // Explicitly checking for drop greater than 60
+        fatigueLevel = "High Fatigue";    // 60%+ drop
+    }
+
+    // Print Final Data to Serial Monitor
+    Serial.println("\n---- FINAL FATIGUE ANALYSIS ----");
+    Serial.print("Baseline EMG: ");
+    Serial.println(initialValue);
+    Serial.print("Average EMG (30 sec): ");
+    Serial.println(avgEMG);
+    Serial.print("Drop: ");
+    Serial.print(drop);
+    Serial.println("%");
+    Serial.print("Final Fatigue Level: ");
+    Serial.println(fatigueLevel);
+    Serial.println("--------------------------------\n");
+
+    delay(5000);  // Wait 5 seconds before next analysis
+}
